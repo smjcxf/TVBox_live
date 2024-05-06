@@ -1,45 +1,88 @@
 import requests
-import re
-from bs4 import BeautifulSoup
+from lxml import etree
 import os
 import threading
 import time
 import sys
 
 
+# def get_url(name):
+#     headers = {
+#         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+#     }
+#     url = "http://tonkiang.us/"
+#     # 获取两页的m3u8链接
+#     # params = {
+#     #     "page": 1,
+#     #     "s": name
+#     # }
+#     # response = requests.get(url, headers=headers, params=params, verify=False)
+#     data = {
+#         "search": name,
+#         "Submit": " "
+#     }
+#     try:
+#         time.sleep(5)
+#         with requests.Session() as session:
+#             response = session.post(url, headers=headers, data=data, verify=False)
+#             print(response)
+#         # print(response.text)
+#         # 将 HTML 转换为 Element 对象
+#         root = etree.HTML(response.text)
+#         result_divs = root.xpath("//div[@class='result']")
+#
+#         # 打印提取到的 <div class="result"> 标签
+#         m3u8_list = []
+#         for div in result_divs:
+#             # 如果要获取标签内的文本内容
+#             # print(etree.tostring(div, pretty_print=True).decode())
+#             for element in div.xpath(".//tba"):
+#                 if element.text is not None:
+#                     m3u8_list.append(element.text.strip())
+#                     print(element.text.strip())
+#         return m3u8_list
+#
+#     except requests.exceptions.RequestException as e:
+#         print(f"Error: 请求异常. Exception: {e}")
+#         return
 def get_url(name):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
     }
+
     url = "http://tonkiang.us/"
-    # 获取两页的m3u8链接
-    # params = {
-    #     "page": 1,
-    #     "s": name
-    # }
-    # response = requests.get(url, headers=headers, params=params, verify=False)
+    # 电视台名字搜索
     data = {
-        "search": name,
+        "search": f"{name}",
         "Submit": " "
     }
-    with requests.Session() as session:
-        response = session.post(url, headers=headers, data=data, verify=False)
-        print(response)
-    # print(response.text)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    # Find the div with class "m3u8"
-    m3u8_divs = soup.find_all('div', class_='m3u8')
-    m3u8_list = []
-    for div in m3u8_divs:
-        # Extract the HTTP link from the onclick attribute
-        onclick_value = div.find('img')['onclick']
-        url_match = re.search(r'copyto\("([^"]+)"\)', onclick_value)
+    try:
+        res = requests.get(url, headers=headers, data=data, verify=False)
+        cookie = res.cookies
+        time.sleep(3)
+        # 搜索页数
+        m3u8_list = []
+        for i in range(3):
+            url = f"http://tonkiang.us/?page={i + 1}&s={name}"
+            time.sleep(3)
+            response = requests.post(url, headers=headers, data=data, cookies=cookie, verify=False)
+            # print(response.text)
+            # 将 HTML 转换为 Element 对象
+            root = etree.HTML(response.text)
+            result_divs = root.xpath("//div[@class='resultplus']")
+            # 打印提取到的 <div class="result"> 标签
+            for div in result_divs:
+                # 如果要获取标签内的文本内容
+                # print(etree.tostring(div, pretty_print=True).decode())
+                for element in div.xpath(".//tba"):
+                    if element.text is not None:
+                        m3u8_list.append(element.text.strip())
+                        print(element.text.strip())
+        return m3u8_list
 
-        if url_match:
-            extracted_url = url_match.group(1)
-            print(extracted_url)
-            m3u8_list.append(extracted_url)
-    return m3u8_list
+    except requests.exceptions.RequestException as e:
+        print(f"Error: 请求异常. Exception: {e}")
+        return
 
 
 def download_m3u8(url, name, initial_url=None):
@@ -161,15 +204,16 @@ def re_dup(filepath):
 
 
 if __name__ == '__main__':
-    print('说明：\n'
-          '速度阈值默认为0.5\n'
-          '阈值越大，直播流速度越快，检索出的直播流数量越少\n'
-          '建议日常阈值最小0.3，能够满足日常播放流不卡顿\n')
-    speed = input('请直接回车确定或输入阈值:  ')
-    if speed == '':
-        speed = 1
-    else:
-        speed = float(speed)
+    # print('说明：\n'
+    #       '速度阈值默认为1\n'
+    #       '阈值越大，直播流速度越快，检索出的直播流数量越少\n'
+    #       '建议日常阈值最小0.3，能够满足日常播放流不卡顿\n')
+    # speed = input('请直接回车确定或输入阈值:  ')
+    # if speed == '':
+    #     speed = 1
+    # else:
+    #     speed = float(speed)
+    speed = 1
     # 获取当前工作目录
     current_directory = os.getcwd()
     # 构造上级目录的路径
@@ -181,12 +225,13 @@ if __name__ == '__main__':
     tv_dict = {}
     # 遍历当前文件下的txt文件,提取文件名
     TV_names = [os.path.splitext(f)[0] for f in os.listdir(current_directory) if f.endswith(".txt")]
-    # TV_names = ['test']
+    # '🇭🇰港台'  '🇨🇳卫视频道'  '🇨🇳央视频道'
+    # TV_names = ['🇨🇳央视频道','🇭🇰港台']
     for TV_name in TV_names:
         # 删除历史测试记录，防止文件追加写入
         if os.path.exists(TV_name):
             import shutil
-
+            # 删除文件夹及其内容
             try:
                 shutil.rmtree(TV_name)
                 print(f"Folder '{TV_name}' deleted successfully.")
@@ -195,7 +240,7 @@ if __name__ == '__main__':
         time.sleep(1)
         if not os.path.exists(TV_name):
             os.makedirs(TV_name)
-        # 读取文件并逐行处理
+        # 读取文件并逐行处理ls
         with open(f'{TV_name}.txt', 'r', encoding='utf-8') as file:
             names = [line.strip() for line in file]
             for name in names:
